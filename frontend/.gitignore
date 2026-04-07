@@ -21,3 +21,4 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+food-recipe-generation/backend/recipe_generator_lstm.pth

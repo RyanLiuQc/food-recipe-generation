@@ -111,6 +111,7 @@
   flex-direction: column;
   height: 80vh;
   justify-content: space-around;
+  width: 50vw;
 }
 
 .ing_instructions{
@@ -122,6 +123,20 @@
 .ready_btn {
   border: none;
   max-width: 40vw;
+}
+
+.recipe{
+  background-color: white;
+  color: black;
+  font-family: "Libre Franklin", sans-serif;
+  font-size: medium;
+  width: 60vh;
+  padding: 2vh;
+  height: 80vh;
+}
+
+.recipe_box {
+  width: 60vw;
 }
 
 
