@@ -4,6 +4,7 @@ const Generator = () => {
 
     const [ingredients, setIngredients] = useState("chicken, spinach, cream, garlic")
     const [recipe, setRecipe] = useState("")
+    const [visibility, setVisibility] = useState("hidden")
 
     const ready = async() => {
         try {
@@ -15,6 +16,8 @@ const Generator = () => {
 
             const result = await waiting.json()
             setRecipe(result.recipe)
+            setVisibility("visible")
+            
 
         } catch (error){
             alert("oops that didn't work")
@@ -33,7 +36,7 @@ const Generator = () => {
                 <button className="ready_btn" onClick={ready}>Ready to cook</button>
             </div>
             <div className="recipe_div">
-                <p className="recipe">{recipe}</p>
+                <p className="recipe" style={{"visibility": visibility}}>{recipe}</p>
             </div>
         </div>
     )

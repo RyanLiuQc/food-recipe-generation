@@ -2,83 +2,71 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from lstm_model import LSTMGenerator
+import re
 
 # GPT-2's tokenizer is better for generation tasks than BERT's
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 # GPT-2 doesn't have a default padding token, so we set it to the EOS token
 tokenizer.pad_token = tokenizer.eos_token
 
-
-# 1. Recreate the empty model architecture (must match exact dimensions used in training)
-loaded_model = LSTMGenerator(
-    vocab_size=tokenizer.vocab_size,  # 50257
-    embedding_dim=256,
-    hidden_dim=512
-)
-# 3. Move to GPU and set to Evaluation Mode
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# 2. Load the saved weights
-#loaded_model.load_state_dict(torch.load('recipe_generator_lstm.pth'))
+
+loaded_model = LSTMGenerator(vocab_size=tokenizer.vocab_size, embedding_dim=256, hidden_dim=512)
+
 loaded_model.load_state_dict(
-    torch.load('recipe_generator_lstm.pth', map_location=device)
+    torch.load('recipe_generator_0408.pth', map_location=device)
 )
 
-
+# 3. Move to GPU and set to Evaluation Mode
 loaded_model.to(device)
-loaded_model.eval() # tells pytorch we are not training
+loaded_model.eval() 
+# inference.py
 
-def generate_recipe(ingredients_list, recipe_title="My Custom Recipe", max_length=300, temperature=0.8):
-    """
-    Takes ingredients, formats them using our training landmarks, and generates the instructions.
-    Temperature controls creativity:
-        Lower (e.g., 0.3) = safer, more repetitive.
-        Higher (e.g., 1.2) = creative, potentially chaotic.
-    """
+def clean_output(text: str) -> str:
+    # Remove tokens like <END>, <START>, etc.
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+def generate_recipe(ingredients_list, recipe_title="Custom Recipe",
+                    max_length=300, temperature=0.8, top_k=50):
+
     model = loaded_model
+    tok = tokenizer
+
     model.eval()
     device = next(model.parameters()).device
 
-    # 1. Format the "Seed" text exactly how the model saw it during training
-    ingredients_str = "\n".join([f"• {ing.strip()}" for ing in ingredients_list])
-    seed_text = f"📗 {recipe_title}\n🥕\n{ingredients_str}\n📝\n"
+    ingredients_str = "\n".join([ing.strip() for ing in ingredients_list])
 
-    # 2. Tokenize the seed text
-    input_ids = tokenizer.encode(seed_text, return_tensors='pt').to(device)
-    generated_sequence = input_ids[0].tolist()
+    seed_text = (
+        f"TITLE: {recipe_title}\n"
+        f"INGREDIENTS:\n{ingredients_str}\n"
+        f"INSTRUCTIONS:\n"
+    )
 
-    print("--- Generating Recipe ---")
+    input_ids = tok.encode(seed_text, return_tensors='pt').to(device)
+    generated = input_ids
+
+    h = model.init_hidden(1, device)
 
     with torch.no_grad():
         for _ in range(max_length):
-            # We must pass the sequence into the model.
-            # To prevent memory errors, we only pass the last 300 tokens (our MAX_SEQ_LENGTH from training)
-            seq_input = torch.tensor([generated_sequence[-300:]]).to(device)
+            outputs, h = model(generated[:, -300:], h)
+            logits = outputs[:, -1, :] / temperature
 
-            # Re-initialize hidden state for this forward pass
-            h = model.init_hidden(1, device)
+            topk_vals, topk_idx = torch.topk(logits, top_k)
+            probs = torch.softmax(topk_vals, dim=-1)
 
-            # Get predictions
-            logits, _ = model(seq_input, h)
+            sampled_idx = torch.multinomial(probs, 1)
+            next_token = topk_idx.gather(-1, sampled_idx)
 
-            # We only care about the model's prediction for the *very last* token
-            next_token_logits = logits[0, -1, :]
+            generated = torch.cat((generated, next_token), dim=1)
 
-            # 3. Apply Temperature Scaling
-            next_token_logits = next_token_logits / temperature
-
-            # 4. Convert logits to probabilities using Softmax
-            probs = F.softmax(next_token_logits, dim=-1)
-
-            # 5. Sample the next token based on those probabilities
-            next_token = torch.multinomial(probs, num_samples=1).item()
-
-            # Append to our sequence
-            generated_sequence.append(next_token)
-
-            # Stop generating if the model outputs the padding/end token
-            if next_token == tokenizer.eos_token_id:
+            if next_token.item() == tok.eos_token_id:
                 break
 
-    # 6. Decode the final sequence back into readable text
-    return tokenizer.decode(generated_sequence)
-    
+    return clean_output(tok.decode(generated[0]))

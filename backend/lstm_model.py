@@ -1,8 +1,6 @@
 # lstm
 import torch.nn as nn
 import torch
-
-
 class LSTMGenerator(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.2):
         super(LSTMGenerator, self).__init__()
