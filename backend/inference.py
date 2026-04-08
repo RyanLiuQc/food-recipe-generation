@@ -20,7 +20,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # 2. Load the saved weights
 #loaded_model.load_state_dict(torch.load('recipe_generator_lstm.pth'))
 loaded_model.load_state_dict(
-    torch.load('recipe_generator_lstm.pth', map_location=device)
+    torch.load('recipe_generator_lstm.pth', map_location=device, weights_only=True)
 )
 
 
